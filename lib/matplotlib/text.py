@@ -130,6 +130,9 @@ class Text(Artist):
         """
         Create a `.Text` instance at *x*, *y* with string *text*.
 
+        While Text accepts the `label` keyword argument, it is not added to the
+        handles of a legend by default.
+
         Valid keyword arguments are:
 
         %(Text:kwdoc)s

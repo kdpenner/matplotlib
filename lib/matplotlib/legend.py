@@ -35,6 +35,7 @@ from matplotlib.font_manager import FontProperties
 from matplotlib.lines import Line2D
 from matplotlib.patches import (Patch, Rectangle, Shadow, FancyBboxPatch,
                                 StepPatch)
+from matplotlib.text import Text
 from matplotlib.collections import (
     Collection, CircleCollection, LineCollection, PathCollection,
     PolyCollection, RegularPolyCollection)
@@ -642,7 +643,7 @@ class Legend(Artist):
         StemContainer: legend_handler.HandlerStem(),
         ErrorbarContainer: legend_handler.HandlerErrorbar(),
         Line2D: legend_handler.HandlerLine2D(),
-        Patch: legend_handler.HandlerPatch(),
+        Rectangle: legend_handler.HandlerPatch(),
         StepPatch: legend_handler.HandlerStepPatch(),
         LineCollection: legend_handler.HandlerLineCollection(),
         RegularPolyCollection: legend_handler.HandlerRegularPolyCollection(),
@@ -763,28 +764,35 @@ class Legend(Artist):
         for orig_handle, lab in zip(handles, labels):
             handler = self.get_legend_handler(legend_handler_map, orig_handle)
             if handler is None:
-                _api.warn_external(
-                    "Legend does not support {!r} instances.\nA proxy artist "
-                    "may be used instead.\nSee: "
-                    "https://matplotlib.org/users/legend_guide.html"
-                    "#creating-artists-specifically-for-adding-to-the-legend-"
-                    "aka-proxy-artists".format(orig_handle))
-                # We don't have a handle for this artist, so we just defer
-                # to None.
-                handle_list.append(None)
-            else:
-                textbox = TextArea(lab, textprops=label_prop,
-                                   multilinebaseline=True)
-                handlebox = DrawingArea(width=self.handlelength * fontsize,
-                                        height=height,
-                                        xdescent=0., ydescent=descent)
+                if isinstance(orig_handle, Text):
+                    _api.warn_external(
+                            "Legend does not support handles for Text "
+                            "instances.\nSee: https://matplotlib.org/stable/"
+                            "tutorials/intermediate/legend_guide.html"
+                            "#implementing-a-custom-legend-handler")
+                    continue
+                else:
+                    _api.warn_external(
+                            "Legend does not support handles for {0} "
+                            "instances.\nA Rectangle proxy artist will be "
+                            "used instead.\nSee: https://matplotlib.org/"
+                            "stable/tutorials/intermediate/legend_guide.html"
+                            "#controlling-the-legend-entries".format(
+                                type(orig_handle).__name__))
+                    handler = self.get_legend_handler(legend_handler_map,
+                                                      Rectangle)
+            textbox = TextArea(lab, textprops=label_prop,
+                               multilinebaseline=True)
+            handlebox = DrawingArea(width=self.handlelength * fontsize,
+                                    height=height,
+                                    xdescent=0., ydescent=descent)
 
-                text_list.append(textbox._text)
-                # Create the artist for the legend which represents the
-                # original artist/handle.
-                handle_list.append(handler.legend_artist(self, orig_handle,
-                                                         fontsize, handlebox))
-                handles_and_labels.append((handlebox, textbox))
+            text_list.append(textbox._text)
+            # Create the artist for the legend which represents the
+            # original artist/handle.
+            handle_list.append(handler.legend_artist(self, orig_handle,
+                                                     fontsize, handlebox))
+            handles_and_labels.append((handlebox, textbox))
 
         if handles_and_labels:
             # We calculate number of rows in each column. The first
@@ -1141,27 +1149,19 @@ def _get_legend_handles(axs, legend_handler_map=None):
     for ax in axs:
         handles_original += [
             *(a for a in ax._children
-              if isinstance(a, (Line2D, Patch, Collection))),
+              if isinstance(a, (Line2D, Patch, Collection, Text))),
             *ax.containers]
         # support parasite axes:
         if hasattr(ax, 'parasites'):
             for axx in ax.parasites:
                 handles_original += [
                     *(a for a in axx._children
-                      if isinstance(a, (Line2D, Patch, Collection))),
+                      if isinstance(a, (Line2D, Patch, Collection, Text))),
                     *axx.containers]
-
-    handler_map = Legend.get_default_handler_map()
-
-    if legend_handler_map is not None:
-        handler_map = handler_map.copy()
-        handler_map.update(legend_handler_map)
-
-    has_handler = Legend.get_legend_handler
 
     for handle in handles_original:
         label = handle.get_label()
-        if label != '_nolegend_' and has_handler(handler_map, handle):
+        if label not in ['_nolegend_', '']:
             yield handle
 
 
